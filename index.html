@@ -371,7 +371,7 @@
   </div>
 
   <script>
-    (function () {
+    (async function () {
       'use strict';
 
       const CATEGORY_EMOJIS = {
@@ -392,29 +392,56 @@
 
       const app = document.getElementById('app');
 
-      function decodeData() {
-        let hash = window.location.hash.substring(1);
+      // Metni açma (Decompress Deflate)
+      async function decompressText(base64) {
+        // Base64 URL safe decoding
+        let bin = base64.replace(/-/g, '+').replace(/_/g, '/');
+        while (bin.length % 4) bin += '=';
+        
+        const binary = atob(bin);
+        const byteArray = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          byteArray[i] = binary.charCodeAt(i);
+        }
+        
+        const ds = new DecompressionStream('deflate');
+        const writer = ds.writable.getWriter();
+        writer.write(byteArray);
+        writer.close();
+        
+        const arrayBuffer = await new Response(ds.readable).arrayBuffer();
+        return new TextDecoder().decode(arrayBuffer);
+      }
+
+      async function decodeData() {
+        const hash = window.location.hash.substring(1);
         if (!hash) return null;
 
-        // Base64 URL safe decoding
-        hash = hash.replace(/-/g, '+').replace(/_/g, '/');
-        while (hash.length % 4) hash += '=';
-
         try {
-          const json = decodeURIComponent(escape(atob(hash)));
+          let json = '';
+          
+          // Yeni sıkıştırılmış v2 formatı kontrolü
+          if (hash.startsWith('v2/')) {
+            const compressed = hash.substring(3);
+            json = await decompressText(compressed);
+          } else {
+            // Eski base64 formatı
+            let bin = hash.replace(/-/g, '+').replace(/_/g, '/');
+            while (bin.length % 4) bin += '=';
+            json = decodeURIComponent(escape(atob(bin)));
+          }
+
           const data = JSON.parse(json);
           if (!Array.isArray(data)) return null;
           
           return data.map(item => {
-            // Eğer yeni sıkıştırılmış format (dizi) ise:
             if (Array.isArray(item)) {
-              const name = item[0] || '';
+              const name = item[0] || 'Bilinmeyen Ürün';
               const catCode = item[1] || '';
-              const category = CAT_SHORTS_REV[catCode] || catCode;
+              const category = CAT_SHORTS_REV[catCode] || catCode || 'Bileşen';
               
               let price = '';
               if (item[2]) {
-                // Fiyatı biçimlendir (örn: 15999 -> 15.999 TL)
                 price = new Intl.NumberFormat('tr-TR').format(parseInt(item[2])) + ' TL';
               }
               
@@ -431,10 +458,9 @@
               return { name, category, price, url, image };
             }
             
-            // Eski format desteği (geriye dönük uyumluluk için)
             return {
-              name: item.n || '',
-              category: item.c || '',
+              name: item.n || 'Bilinmeyen Ürün',
+              category: item.c || 'Bileşen',
               price: item.p || '',
               url: item.u || '',
               image: item.i || ''
@@ -535,8 +561,6 @@
         `;
 
         app.innerHTML = html;
-
-        // Title güncelle
         document.title = `PC Build (${products.length} parça) — Epey Build Paylaşıcı`;
       }
 
@@ -544,27 +568,3 @@
         app.innerHTML = `
           <div class="error-state">
             <div class="error-icon">🔍</div>
-            <h2>Build bulunamadı</h2>
-            <p>
-              Bu link geçerli bir build verisi içermiyor. 
-              Link doğru kopyalanmamış olabilir.
-            </p>
-          </div>
-          <footer class="viewer-footer">
-            <p class="footer-powered">Epey Build Paylaşıcı Chrome Extension 💜</p>
-          </footer>
-        `;
-      }
-
-      // Ana akış
-      const products = decodeData();
-      if (products && products.length > 0) {
-        renderBuild(products);
-      } else {
-        renderError();
-      }
-
-    })();
-  </script>
-</body>
-</html>
