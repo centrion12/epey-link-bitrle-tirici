@@ -382,23 +382,64 @@
         'Laptop': '💻', 'Hoparlör': '🔊', 'Mikrofon': '🎤', 'Webcam': '📷'
       };
 
+      const CAT_SHORTS_REV = {
+        'p': 'İşlemci', 'g': 'Ekran Kartı', 'm': 'Anakart', 'r': 'RAM',
+        's': 'SSD', 'h': 'HDD', 'c': 'Kasa', 'w': 'Güç Kaynağı',
+        'o': 'Monitör', 'k': 'Klavye', 'u': 'Mouse', 'e': 'Kulaklık',
+        'f': 'Soğutucu', 'i': 'İşlemci Soğutucusu', 'a': 'Kasa Fanı',
+        'l': 'Laptop', 'b': 'Hoparlör', 'n': 'Mikrofon', 'x': 'Webcam'
+      };
+
       const app = document.getElementById('app');
 
       function decodeData() {
-        const hash = window.location.hash.substring(1);
+        let hash = window.location.hash.substring(1);
         if (!hash) return null;
+
+        // Base64 URL safe decoding
+        hash = hash.replace(/-/g, '+').replace(/_/g, '/');
+        while (hash.length % 4) hash += '=';
 
         try {
           const json = decodeURIComponent(escape(atob(hash)));
           const data = JSON.parse(json);
           if (!Array.isArray(data)) return null;
-          return data.map(item => ({
-            name: item.n || '',
-            category: item.c || '',
-            price: item.p || '',
-            url: item.u || '',
-            image: item.i || ''
-          }));
+          
+          return data.map(item => {
+            // Eğer yeni sıkıştırılmış format (dizi) ise:
+            if (Array.isArray(item)) {
+              const name = item[0] || '';
+              const catCode = item[1] || '';
+              const category = CAT_SHORTS_REV[catCode] || catCode;
+              
+              let price = '';
+              if (item[2]) {
+                // Fiyatı biçimlendir (örn: 15999 -> 15.999 TL)
+                price = new Intl.NumberFormat('tr-TR').format(parseInt(item[2])) + ' TL';
+              }
+              
+              let url = item[3] || '';
+              if (url && !url.startsWith('http')) {
+                url = 'https://www.epey.com' + url;
+              }
+              
+              let image = item[4] || '';
+              if (image && !image.startsWith('http')) {
+                image = 'https://www.epey.com' + image;
+              }
+              
+              return { name, category, price, url, image };
+            }
+            
+            // Eski format desteği (geriye dönük uyumluluk için)
+            return {
+              name: item.n || '',
+              category: item.c || '',
+              price: item.p || '',
+              url: item.u || '',
+              image: item.i || ''
+            };
+          });
         } catch (e) {
           console.error('Build verisi decode edilemedi:', e);
           return null;
