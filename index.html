@@ -371,7 +371,7 @@
   </div>
 
   <script>
-    (async function () {
+    (function () {
       'use strict';
 
       const CATEGORY_EMOJIS = {
@@ -382,90 +382,28 @@
         'Laptop': '💻', 'Hoparlör': '🔊', 'Mikrofon': '🎤', 'Webcam': '📷'
       };
 
-      const CAT_SHORTS_REV = {
-        'p': 'İşlemci', 'g': 'Ekran Kartı', 'm': 'Anakart', 'r': 'RAM',
-        's': 'SSD', 'h': 'HDD', 'c': 'Kasa', 'w': 'Güç Kaynağı',
-        'o': 'Monitör', 'k': 'Klavye', 'u': 'Mouse', 'e': 'Kulaklık',
-        'f': 'Soğutucu', 'i': 'İşlemci Soğutucusu', 'a': 'Kasa Fanı',
-        'l': 'Laptop', 'b': 'Hoparlör', 'n': 'Mikrofon', 'x': 'Webcam'
-      };
-
       const app = document.getElementById('app');
 
-      // Metni açma (Decompress Deflate)
-      async function decompressText(base64) {
-        // Base64 URL safe decoding
-        let bin = base64.replace(/-/g, '+').replace(/_/g, '/');
-        while (bin.length % 4) bin += '=';
-        
-        const binary = atob(bin);
-        const byteArray = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          byteArray[i] = binary.charCodeAt(i);
-        }
-        
-        const ds = new DecompressionStream('deflate');
-        const writer = ds.writable.getWriter();
-        writer.write(byteArray);
-        writer.close();
-        
-        const arrayBuffer = await new Response(ds.readable).arrayBuffer();
-        return new TextDecoder().decode(arrayBuffer);
-      }
-
-      async function decodeData() {
-        const hash = window.location.hash.substring(1);
+      function decodeData() {
+        let hash = window.location.hash.substring(1);
         if (!hash) return null;
 
-        try {
-          let json = '';
-          
-          // Yeni sıkıştırılmış v2 formatı kontrolü
-          if (hash.startsWith('v2/')) {
-            const compressed = hash.substring(3);
-            json = await decompressText(compressed);
-          } else {
-            // Eski base64 formatı
-            let bin = hash.replace(/-/g, '+').replace(/_/g, '/');
-            while (bin.length % 4) bin += '=';
-            json = decodeURIComponent(escape(atob(bin)));
-          }
+        // Custom path önekini temizle
+        if (hash.startsWith('al-gerizekali-pc-topladim/')) {
+          hash = hash.substring('al-gerizekali-pc-topladim/'.length);
+        }
 
+        try {
+          const json = decodeURIComponent(escape(atob(hash)));
           const data = JSON.parse(json);
           if (!Array.isArray(data)) return null;
-          
-          return data.map(item => {
-            if (Array.isArray(item)) {
-              const name = item[0] || 'Bilinmeyen Ürün';
-              const catCode = item[1] || '';
-              const category = CAT_SHORTS_REV[catCode] || catCode || 'Bileşen';
-              
-              let price = '';
-              if (item[2]) {
-                price = new Intl.NumberFormat('tr-TR').format(parseInt(item[2])) + ' TL';
-              }
-              
-              let url = item[3] || '';
-              if (url && !url.startsWith('http')) {
-                url = 'https://www.epey.com' + url;
-              }
-              
-              let image = item[4] || '';
-              if (image && !image.startsWith('http')) {
-                image = 'https://www.epey.com' + image;
-              }
-              
-              return { name, category, price, url, image };
-            }
-            
-            return {
-              name: item.n || 'Bilinmeyen Ürün',
-              category: item.c || 'Bileşen',
-              price: item.p || '',
-              url: item.u || '',
-              image: item.i || ''
-            };
-          });
+          return data.map(item => ({
+            name: item.n || '',
+            category: item.c || '',
+            price: item.p || '',
+            url: item.u || '',
+            image: item.i || ''
+          }));
         } catch (e) {
           console.error('Build verisi decode edilemedi:', e);
           return null;
@@ -561,6 +499,8 @@
         `;
 
         app.innerHTML = html;
+
+        // Title güncelle
         document.title = `PC Build (${products.length} parça) — Epey Build Paylaşıcı`;
       }
 
@@ -568,3 +508,20 @@
         app.innerHTML = `
           <div class="error-state">
             <div class="error-icon">🔍</div>
+            <h2>Build bulunamadı</h2>
+            <p>
+              Bu link geçerli bir build verisi içermiyor. 
+              Link doğru kopyalanmamış olabilir.
+            </p>
+          </div>
+          <footer class="viewer-footer">
+            <p class="footer-powered">Epey Build Paylaşıcı Chrome Extension 💜</p>
+          </footer>
+        `;
+      }
+
+      // Ana akış
+      const products = decodeData();
+      if (products && products.length > 0) {
+        renderBuild(products);
+      } else {
