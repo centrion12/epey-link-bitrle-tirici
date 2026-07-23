@@ -356,6 +356,7 @@
         let hash = window.location.hash.substring(1);
         if (!hash) return null;
 
+        // Custom path önekini temizle (varsa geriye dönük uyumluluk için)
         if (hash.startsWith('al-gerizekali-pc-topladim/')) {
           hash = hash.substring('al-gerizekali-pc-topladim/'.length);
         }
